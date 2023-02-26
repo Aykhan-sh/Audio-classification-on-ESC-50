@@ -1,8 +1,24 @@
 import torchaudio
 from torch import nn
+from typing import Optional
 
 
-class MelFeaturizer(nn.Module):
+class SpectrogramFeaturizer(nn.Module):
+    def forward(self, wav, length=None):
+        spectrogram = self.featurizer(wav)
+        spectrogram = spectrogram.clamp(min=1e-5).log()
+
+        if length is not None:
+            length = (length - self.featurizer.win_length) // self.featurizer.hop_length
+            # We add `4` because in MelSpectrogram center==True
+            length += 1 + 4
+
+            return spectrogram, length
+
+        return spectrogram
+
+
+class MelFeaturizer(SpectrogramFeaturizer):
     def __init__(
         self,
         sample_rate=16000,
@@ -23,15 +39,18 @@ class MelFeaturizer(nn.Module):
             center=center,
         )
 
-    def forward(self, wav, length=None):
-        mel_spectrogram = self.featurizer(wav)
-        mel_spectrogram = mel_spectrogram.clamp(min=1e-5).log()
 
-        if length is not None:
-            length = (length - self.featurizer.win_length) // self.featurizer.hop_length
-            # We add `4` because in MelSpectrogram center==True
-            length += 1 + 4
-
-            return mel_spectrogram, length
-
-        return mel_spectrogram
+class MFCCFeaturizer(SpectrogramFeaturizer):
+    def __init__(
+        self,
+        sample_rate: int = 16000,
+        n_mfcc: int = 40,
+        dct_type: int = 2,
+        norm: str = "ortho",
+        log_mels: bool = False,
+        melkwargs: Optional[dict] = None,
+    ) -> None:
+        super().__init__()
+        self.featurizer = torchaudio.transforms.MFCC(
+            sample_rate, n_mfcc, dct_type, norm, log_mels, melkwargs=melkwargs
+        )
